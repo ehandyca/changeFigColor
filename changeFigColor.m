@@ -134,6 +134,10 @@ function fig = changeFigColor(varargin)
 % - Added capability to read-in ".fig" files.
 % - Additional bug fixes.
 % Eric Handy-Cardenas, 2024/12/04
+%
+% Version 3.1.1
+% - Added color change support for "text" and "constantline" plot objects.
+% Eric Handy-Cardenas, 2025/01/13
 % -------------------------------------------------------------------------
 
 % Short color names:
@@ -530,6 +534,18 @@ function invertColors(axObject,icmap)
                     newMrkFaceColor = abs(1 - oldMrkFaceColor);
                     axObject.Children(plotObj).MarkerFaceColor = newMrkFaceColor;
                 end
+
+            case 'text'
+                % Invert general data color:
+                oldColor = axObject.Children(plotObj).Color;
+                newColor = abs(1 - oldColor);
+                axObject.Children(plotObj).Color = newColor;
+                
+            case 'constantline'
+                % Invert general data color:
+                oldColor = axObject.Children(plotObj).Color;
+                newColor = abs(1 - oldColor);
+                axObject.Children(plotObj).Color = newColor;
 
             otherwise
                 warning(['Plot type: "',axObject.Children(plotObj).Type,'" not supported.'])
