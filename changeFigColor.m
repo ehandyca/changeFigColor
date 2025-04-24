@@ -16,6 +16,7 @@ function fig = changeFigColor(varargin)
 % changeFigColor(__, figColor, txtColor);
 % changeFigColor(__, 'fontsize', 20);
 % changeFigColor(__, 'invertDataColor');
+% changeFigColor(__, 'invertBlackOnly');
 % changeFigColor(__, 'invertColormap');
 % changeFigColor(__, 'invertColormap', 'vorticity');
 % changeFigColor(__, 'textInterpreter', interpreter);
@@ -74,6 +75,12 @@ function fig = changeFigColor(varargin)
 %           'invertDataColor' will not affect it unless 'invertColormap' is
 %           passed as an additional input argument.
 %
+% changeFigColor(__, 'invertBlackOnly') : Inverts color of data plotted in
+%           active figure that is black. If any plot element within the
+%           active figure is a color different from black, its color will
+%           not be affected. If the 'invertDataColor' is also passed, it 
+%           will be overwritten by 'invertBlackOnly'.
+%
 % changeFigColor(__, 'invertColormap') : Inverts active figure colormap.
 %
 % fig = changeFigColor(__) : Returns figure handle.
@@ -115,6 +122,8 @@ function fig = changeFigColor(varargin)
 %           Sets color of specified figure to default white, inverts plotted data object colors, and inverts active colormap. Sets interpreter to LaTeX.
 % [17] fig = changeFigColor('k', figure, 'textInterpreter', 'tex', 'invertDataColor');
 %           Sets color of specified figure to black, changing text and axis colors to white. Sets interpreter to TeX. Inverts plotted data object colors.
+% [18] fig = changeFigColor('k', figure, 'invertBlackOnly');
+%           Sets color of specified figure to black, changing text and axis colors to white. Sets interpreter to TeX. Inverts plotted data object colors.
 % -------------------------------------------------------------------------
 % Version 1.0.0
 % Eric Handy-Cardenas, 2024/06/05
@@ -138,6 +147,11 @@ function fig = changeFigColor(varargin)
 % Version 3.1.1
 % - Added color change support for "text" and "constantline" plot objects.
 % Eric Handy-Cardenas, 2025/01/13
+%
+% Version 3.1.2
+% - Added capability to only invert black lines to white.
+% - Bug fixes.
+% Eric Handy-Cardenas, 2025/04/24
 % -------------------------------------------------------------------------
 
 % Short color names:
@@ -199,6 +213,7 @@ for inptNum = 1:length(varargin)
                 elseif isempty(imformats(ext(2:end)))
                     error(['Unsupported image file format: ',ext,newline,'For supported image file formats check "imread()" documentation.'])
                 else
+                    image_file_flag = 1; % raise flag for non-figure file type
                     [A,cmap] = imread(var_option);
                     if isempty(cmap)
                         [A,cmap] = rgb2ind(A,256);
@@ -239,6 +254,9 @@ for inptNum = 1:length(varargin)
                 % Evaluate for name-only arguments ------------------------
                     case 'invertDataColor'
                         idc = 1;
+
+                    case 'invertBlackOnly'
+                        ibo = 1;
     
                     otherwise
                         warning(['Unidentified input argument: "',var_option,'"',newline,'Value will be ignored.'])
@@ -248,6 +266,10 @@ for inptNum = 1:length(varargin)
     end
 end
 
+% Check if image file flag is specified, otherwise default to '.fig'
+if ~exist('image_file_flag','var') || isempty(image_file_flag)
+    image_file_flag = 0;
+end
 
 % Check if figColor is specified, otherwise default to white scheme
 if ~exist('figColor','var') || isempty(figColor)
@@ -267,6 +289,13 @@ end
 % Check for invertDataColor (idc) flag 
 if ~exist('idc','var') || isempty(idc)
     idc = 0;
+end
+
+% Check for invertBlackOnly (ibo) flag 
+if ~exist('ibo','var') || isempty(ibo)
+    ibo = 0;
+elseif ibo == 1
+    idc = 1; % overwrites inverDataColor flag so that colors can be changed
 end
 
 % Check for invertColormap (icmap) flag 
@@ -324,7 +353,7 @@ for axnum = 1:length(ax)
 
                     % Invert color of data
                     if idc == 1
-                        invertColors(ax(axnum),icmap);
+                        invertColors(ax(axnum),icmap,ibo);
                     end
 
                 case 2 % for two y-axes plotted using yyaxis
@@ -340,13 +369,13 @@ for axnum = 1:length(ax)
                     % Invert color of data
                     if idc == 1
                         yyaxis(ax(axnum),'right'); axTemp = gca; % activate left y-axis
-                        invertColors(axTemp,icmap);
+                        invertColors(axTemp,icmap,ibo);
                         yyaxis(ax(axnum),'left'); axTemp = gca; % active right y-axis
-                        invertColors(axTemp,icmap);
+                        invertColors(axTemp,icmap,ibo);
                     end
 
                 otherwise
-                    disp('Something went wrong')
+                    warning(['Number of rulers: < ',num2str(numRuler),' > not supported.'])
             end
 
             ax(axnum).XLabel.Interpreter = TextInterpreter;
@@ -379,7 +408,7 @@ end
 
 % Invert colormap ---------------------------------------------------------
 % POTENTIAL BUG: if a figure has multiple colormaps and the colormap
-% inversion optionis enabled, all colormaps will be changed to that of the
+% inversion option is enabled, all colormaps will be changed to that of the
 % last subplot.
 if icmap == 1
     cmapOld = colormap;
@@ -417,8 +446,13 @@ if exist('save_figure_flag','var') && ~isempty(save_figure_flag)
     end
 end
 
+% Close unnecesary figures
+if image_file_flag == 1
+    close(fig);
+end
+
 % Invert figure colors function -------------------------------------------
-function invertColors(axObject,icmap)
+function invertColors(axObject,icmap,ibo)
     for plotObj = 1:length(axObject.Children)
         switch axObject.Children(plotObj).Type
 
@@ -427,7 +461,8 @@ function invertColors(axObject,icmap)
                     oldMrkEdgeColor = axObject.Children(plotObj).MarkerEdgeColor;
                     if ~strcmp(oldMrkEdgeColor,'none')
                         oldMrkEdgeColor = validatecolor(oldMrkEdgeColor);
-                        newMrkEdgeColor = abs(1 - oldMrkEdgeColor);
+                        newMrkEdgeColor = abs(1 - oldMrkEdgeColor); % defines new color
+                        newMrkEdgeColor = checkIfBlack(oldMrkEdgeColor,newMrkEdgeColor,ibo); % overwrites if black-only flag is raised
                         axObject.Children(plotObj).MarkerEdgeColor = newMrkEdgeColor;
                     end
 
@@ -436,18 +471,21 @@ function invertColors(axObject,icmap)
                     if ~strcmp(oldMrkFaceColor,'flat')
                         oldMrkFaceColor = validatecolor(oldMrkFaceColor);
                         newMrkFaceColor = abs(1 - oldMrkFaceColor);
+                        newMrkFaceColor = checkIfBlack(oldMrkFaceColor,newMrkFaceColor,ibo); % overwrites if black-only flag is raised
                         axObject.Children(plotObj).MarkerFaceColor = newMrkFaceColor;
                     end
 
                 % Invert CData:
                     oldCData = axObject.Children(plotObj).CData;
                     newCData = abs(1 - oldCData);
+                    newCData = checkIfBlack(oldCData,newCData,ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).CData = newCData;
 
             case 'line'
                 % Invert general data color:
                 oldColor = validatecolor(axObject.Children(plotObj).Color);
                 newColor = abs(1 - oldColor);
+                newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
 
                 % Invert marker edge color:
@@ -455,6 +493,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkEdgeColor,'auto') && ~strcmp(oldMrkEdgeColor,'none')
                     oldMrkEdgeColor = validatecolor(oldMrkEdgeColor);
                     newMrkEdgeColor = abs(1 - oldMrkEdgeColor);
+                    newMrkEdgeColor = checkIfBlack(oldMrkEdgeColor, newMrkEdgeColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerEdgeColor = newMrkEdgeColor;
                 end
 
@@ -463,6 +502,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkFaceColor,'auto') && ~strcmp(oldMrkFaceColor,'none')
                     oldMrkFaceColor = validatecolor(oldMrkFaceColor);
                     newMrkFaceColor = abs(1 - oldMrkFaceColor);
+                    newMrkFaceColor = checkIfBlack(oldMrkFaceColor, newMrkFaceColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerFaceColor = newMrkFaceColor;
                 end
 
@@ -472,6 +512,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldEdgeColor,'auto') && ~strcmp(oldEdgeColor,'none')
                     oldEdgeColor = validatecolor(oldEdgeColor);
                     newEdgeColor = abs(1 - oldEdgeColor);
+                    newEdgeColor = checkIfBlack(oldEdgeColor, newEdgeColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).EdgeColor = newEdgeColor;
                 end
 
@@ -480,6 +521,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldFaceColor,'auto') && ~strcmp(oldFaceColor,'none')
                     oldFaceColor = validatecolor(oldFaceColor);
                     newFaceColor = abs(1 - oldFaceColor);
+                    newFaceColor = checkIfBlack(oldFaceColor, newFaceColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).FaceColor = newFaceColor;
                 end
 
@@ -496,6 +538,7 @@ function invertColors(axObject,icmap)
                 % Invert general data color:
                 oldColor = axObject.Children(plotObj).Color;
                 newColor = abs(1 - oldColor);
+                newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
 
                 % Invert marker edge color:
@@ -503,6 +546,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkEdgeColor,'auto') && ~strcmp(oldMrkEdgeColor,'none')
                     oldMrkEdgeColor = validatecolor(oldMrkEdgeColor);
                     newMrkEdgeColor = abs(1 - oldMrkEdgeColor);
+                    newMrkEdgeColor = checkIfBlack(oldMrkEdgeColor, newMrkEdgeColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerEdgeColor = newMrkEdgeColor;
                 end
 
@@ -511,12 +555,14 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkFaceColor,'auto') && ~strcmp(oldMrkFaceColor,'none')
                     oldMrkFaceColor = validatecolor(oldMrkFaceColor);
                     newMrkFaceColor = abs(1 - oldMrkFaceColor);
+                    newMrkFaceColor = checkIfBlack(oldMrkFaceColor, newMrkFaceColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerFaceColor = newMrkFaceColor;
                 end
 
             case 'errorbar'
                 oldColor = axObject.Children(plotObj).Color;
                 newColor = abs(1 - oldColor);
+                newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
 
                 % Invert marker edge color:
@@ -524,6 +570,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkEdgeColor,'auto') && ~strcmp(oldMrkEdgeColor,'none')
                     oldMrkEdgeColor = validatecolor(oldMrkEdgeColor);
                     newMrkEdgeColor = abs(1 - oldMrkEdgeColor);
+                    newMrkEdgeColor = checkIfBlack(oldMrkEdgeColor, newMrkEdgeColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerEdgeColor = newMrkEdgeColor;
                 end
 
@@ -532,6 +579,7 @@ function invertColors(axObject,icmap)
                 if ~strcmp(oldMrkFaceColor,'auto') && ~strcmp(oldMrkFaceColor,'none')
                     oldMrkFaceColor = validatecolor(oldMrkFaceColor);
                     newMrkFaceColor = abs(1 - oldMrkFaceColor);
+                    newMrkFaceColor = checkIfBlack(oldMrkFaceColor, newMrkFaceColor, ibo); % overwrites if black-only flag is raised
                     axObject.Children(plotObj).MarkerFaceColor = newMrkFaceColor;
                 end
 
@@ -539,17 +587,33 @@ function invertColors(axObject,icmap)
                 % Invert general data color:
                 oldColor = axObject.Children(plotObj).Color;
                 newColor = abs(1 - oldColor);
+                newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
                 
             case 'constantline'
                 % Invert general data color:
                 oldColor = axObject.Children(plotObj).Color;
                 newColor = abs(1 - oldColor);
+                newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
 
             otherwise
                 warning(['Plot type: "',axObject.Children(plotObj).Type,'" not supported.'])
         end
+    end
+end
+
+
+function color_out = checkIfBlack(color_in_old, color_in_new, ibo_flag)
+    if ibo_flag == 1
+        % check if color is black
+        if ~any(validatecolor(color_in_old))
+            color_out = [1,1,1]; % change to white
+        else
+            color_out = color_in_old; % pass new input color as output
+        end
+    else % if flag is not raised, pass new input color as output
+        color_out = color_in_new;
     end
 end
 
