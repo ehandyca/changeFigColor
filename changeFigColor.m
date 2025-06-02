@@ -1,10 +1,10 @@
 %% Change colors of figure
-% Eric Handy
-% 2024/06/05
-function fig = changeFigColor(varargin)
 % Changes the color of a figure to a specified color. Can change figure
 % color, axes colors, text color, and data color. Also changes default
 % interpreter to LaTeX.
+% Eric Handy
+% 2024/06/05
+function fig = changeFigColor(varargin)
 % -------------------------------------------------------------------------
 % Sintax:
 %
@@ -152,6 +152,10 @@ function fig = changeFigColor(varargin)
 % - Added capability to only invert black lines to white.
 % - Bug fixes.
 % Eric Handy-Cardenas, 2025/04/24
+%
+% Version 3.1.3
+% - Added modifier to switch between two vorticity color palettes when inverting for dark mode.
+% Eric Handy-Cardenas, 2025/05/28
 % -------------------------------------------------------------------------
 
 % Short color names:
@@ -244,6 +248,13 @@ for inptNum = 1:length(varargin)
                             if ~isnumeric(varargin{inptNum+1})
                                 if strcmp(varargin{inptNum+1},'vorticity')
                                     ivort = 1;
+                                    if ~isnumeric(varargin{inptNum+2})
+                                        if strcmp(varargin{inptNum+2},'high')
+                                            ivort_hl = 1; % 1 for high
+                                        elseif strcmp(varargin{inptNum+2},'low')
+                                            ivort_hl = 0; % 0 for low
+                                        end
+                                    end
                                     skipNext = 1; % ignore next argument and parse following input
                                 end
                             end
@@ -258,6 +269,14 @@ for inptNum = 1:length(varargin)
                     case 'invertBlackOnly'
                         ibo = 1;
     
+                    % bandaid fix
+                    case 'low'
+                        temp = [];
+                    case 'high'
+                        temp = [];
+                    case 'vorticity'
+                        temp = [];
+                        
                     otherwise
                         warning(['Unidentified input argument: "',var_option,'"',newline,'Value will be ignored.'])
                 end
@@ -306,6 +325,11 @@ end
 % Check for invert Vorticity (ivort) flag
 if ~exist('ivort','var') || isempty(ivort)
     ivort = 0;
+end
+
+% Check for invert Vorticity (ivort) flag
+if ~exist('ivort_hl','var') || isempty(ivort_hl)
+    ivort_hl = 1;
 end
 
 % If figure object is not passed, operate on active figure
@@ -426,7 +450,14 @@ if icmap == 1
         cmapOld = colormap;
         cmapPos = flipud(hot(255));
         cmapNeg = flipud(abs(1-hot(255)));
-        cmapNew = abs(1-flipud([cmapNeg(111:end,:); ones(15,3); cmapPos(1:end-110,:)]));
+        switch ivort_hl % adjusts the limits of the colormap ( low value --> more yellow/white || high value --> more red/orange )
+            case 1
+                clrThresh = 10; 
+            case 0
+                clrThresh = 110;
+        end
+        
+        cmapNew = abs(1-flipud([cmapNeg(clrThresh+1:end,:); ones(15,3); cmapPos(1:end-clrThresh,:)]));
         colormap(cmapNew(round(linspace(1,size(cmapNew,1),size(cmapOld,1))),:));
 
     else
