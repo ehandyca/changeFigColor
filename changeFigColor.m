@@ -628,6 +628,25 @@ function invertColors(axObject,icmap,ibo)
                 newColor = checkIfBlack(oldColor, newColor, ibo); % overwrites if black-only flag is raised
                 axObject.Children(plotObj).Color = newColor;
 
+            case 'constantregion'
+                % Invert region face edge:
+                oldEdgeColor = axObject.Children(plotObj).EdgeColor;
+                if ~strcmp(oldEdgeColor,'auto') && ~strcmp(oldEdgeColor,'none')
+                    oldEdgeColor = validatecolor(oldEdgeColor);
+                    newEdgeColor = abs(1 - oldEdgeColor);
+                    newEdgeColor = checkIfBlack(oldEdgeColor, newEdgeColor, ibo); % overwrites if black-only flag is raised
+                    axObject.Children(plotObj).EdgeColor = newEdgeColor;
+                end
+
+                % Invert region face color:
+                oldFaceColor = axObject.Children(plotObj).FaceColor;
+                if ~strcmp(oldFaceColor,'auto') && ~strcmp(oldFaceColor,'none')
+                    oldFaceColor = validatecolor(oldFaceColor);
+                    newFaceColor = abs(1 - oldFaceColor);
+                    newFaceColor = checkIfBlack(oldFaceColor, newFaceColor, ibo); % overwrites if black-only flag is raised
+                    axObject.Children(plotObj).FaceColor = newFaceColor;
+                end
+
             otherwise
                 warning(['Plot type: "',axObject.Children(plotObj).Type,'" not supported.'])
         end
